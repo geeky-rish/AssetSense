@@ -1,0 +1,63 @@
+@startuml
+skinparam componentStyle uml2
+skinparam BackgroundColor #0f1115
+skinparam ArrowColor #94a3b8
+skinparam DefaultFontColor #e0e6ed
+skinparam DefaultFontName Inter
+
+title AssetSense Industrial IoT Architecture
+
+package "Physical Edge Layer (L1)" {
+    node "ESP32 MCU" #22c55e {
+        [Safety Automaton (DFA)] as DFA #15803d
+        [Sensor Acquisition Loop] as Sensors #15803d
+    }
+    
+    interface "Vibration (MPU6050)" as Vib
+    interface "Temp (DS18B20)" as Temp
+    interface "Current (ACS712)" as Curr
+    
+    Vib --> Sensors
+    Temp --> Sensors
+    Curr --> Sensors
+    Sensors -> DFA : < 2ms Latency
+}
+
+package "Communication Layer (L2)" {
+    queue "MQTT Broker (HiveMQ)" as MQTT #3b82f6
+    [WebSocket Bridge] as WS #3b82f6
+}
+
+package "Cloud Analytics Layer (L3)" {
+    node "Node.js Server" #f59e0b {
+        [MQTT Client] as Ingest
+        
+        rectangle "Statistical Engine" {
+            [EWMA Drift Filter] as EWMA #b45309
+            [Isolation Forest] as IF #b45309
+            [Sigmoid Health Scorer] as Health #b45309
+        }
+    }
+}
+
+package "Application Layer (L4)" {
+    node "React Dashboard" #8b5cf6 {
+        [Real-time Visualizer] as UI
+        [Simulation Panel] as Sim
+    }
+}
+
+' Connections
+DFA --> MQTT : "Telemetry (QoS 0)"
+DFA --> MQTT : "Alerts (QoS 1)"
+
+MQTT --> Ingest
+Ingest --> EWMA : "Raw Data"
+EWMA --> IF : "Filtered Stream"
+IF --> Health : "Anomaly Score"
+Health --> WS : "Enriched Metadata"
+
+WS --> UI : "JSON Update"
+Sim ..> MQTT : "Fault Injection"
+
+@enduml
